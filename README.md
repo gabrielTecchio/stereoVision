@@ -15,7 +15,7 @@ The Python script running in my computer communicates with an EPSON SCARA robot 
 
 ## How to instal and run this program:
 1. Install python and dependencies;
-'''
+```python
 pip install -r requirements.txt
-'''
+```
 2. Set cameras...
