@@ -2,6 +2,7 @@ from datetime import datetime
 from scipy import linalg
 import tensorflow as tf
 import numpy as np
+import socket
 import csv
 import cv2
 import os
@@ -16,11 +17,11 @@ chessCaptures = False
 camCalibration = False
 QRCodeCapture = False
 linearCoeffsCorrection = False
-logSaving = True
+logSaving = False
 aiTesting = False
 
 #project_directory = os.path.join(os.getcwd(), 'dataFolder_' + str(datetime.now().strftime("%y%m%d")))
-project_directory = os.path.join(os.getcwd(), 'dataFolder_240729')
+project_directory = os.path.join(os.getcwd(), 'dataFolder_240805')
 
 from _cameraCalibration import capture_and_save_image, cam_calibration, stereo_calibration, read_calib_mtx, read_stereo_mtx
 # capture_and_save_image(capL, capR, chess_folder, picturesNumb)
@@ -35,7 +36,7 @@ from _findAruco import detect_aruco_markers
 from _findObject import find_object
 # frameL, centerL, boxL, frameR, centerR, boxR, img_dilationL, img_dilationR, count = find_object(capL, capR, tresholdValueL = 40, tresholdValueR = 120, minArea = 5000, maxArea = 500000, histogram = False, drawContours = True)
 
-# from _linearRegression import calculateLinearCoefficients
+from _linearRegression import calculateLinearCoefficients
 # [interceptX, slopeX, interceptY, slopeY, interceptZ, slopeZ, interceptU, slopeU] = calculateLinearCoefficients(project_folder, mtxL, mtxR, R, T, T_cm_to_pos_in_world, _print = False)
 
 from _saveLog import saveLog
@@ -47,11 +48,14 @@ from _stereoCalculations import stereoVisionCalculation
 if __name__ == "__main__":
     startTime = datetime.now()
     informationsLog = []
+    
+    HOST = "0.0.0.0"  # Standard loopback interface address (localhost)
+    PORT = 5000  # Port to listen on (non-privileged ports are > 1023)
 
     chess_folder = os.path.join(project_directory, 'chessPictures')
     aruco_folder = os.path.join(project_directory, 'QRcode')
     pictures_folder = os.path.join(project_directory, 'stereoVideoPictures')
-    model_path = os.path.join(project_directory, 'cnnModel')
+    model_path = os.path.join(project_directory, 'cnnModel_0_5k')
 
     # Create the project folder if it doesn't exist
     if not os.path.exists(project_directory):
@@ -119,7 +123,7 @@ if __name__ == "__main__":
 
     if chessCaptures:
         capturePhotosStart = datetime.now()
-        capture_and_save_image(capL, capR, chess_folder, picturesNumb = 30)
+        capture_and_save_image(capL, capR, chess_folder, picturesNumb = 100)
         informationsLog.append(['Chess Capturing Time', capturePhotosStart, 'Duration (s)', (datetime.now() - capturePhotosStart).total_seconds()])
     else:
         informationsLog.append(['No calibration pictures taken'])
@@ -171,6 +175,11 @@ if __name__ == "__main__":
     #cv2.imshow("QRCODE", cv2.imread(os.path.join(aruco_folder, 'marker_0.png')))
     #cv2.waitKey(0)
     T_cm_to_pos_in_world = detect_aruco_markers(os.path.join(aruco_folder, 'marker_0.png'), mtxL, distL)
+    
+    ###-Teste_Média_de_três_medidas-###
+    #T_cm_to_pos_in_world[:3, 3]=[961.78303147,-57.63135095,-154.92159881]
+    ####################
+    
     informationsLog.append(['Aruco Ref Calculation Time', referenciaArucoStart, 'Duration (s)', (datetime.now() - referenciaArucoStart).total_seconds()])
 
     #print(T_cm_to_pos_in_world)
@@ -179,7 +188,6 @@ if __name__ == "__main__":
     #print(T_cm_to_pos_in_world)
     #input()
 
-    """
     if linearCoeffsCorrection:
         linearCoeffsStart = datetime.now() 
         try:
@@ -189,7 +197,14 @@ if __name__ == "__main__":
             linearCoeffsCorrection = False
             informationsLog.append(['ERROR @', linearCoeffsStart,'No Linear Coeffs Calculated'])
             input("An exception occurred in Linear Coeff Calculation:", error)
-    """
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind((HOST, PORT))
+    s.listen()
+    conn, addr = s.accept()
+    print(f"Connected by {addr}")
+    test = conn.recv(1024).decode()
+    input(f"Message recieve by {addr}: {test}. Press ENTER to continue.")
 
     # Detection and estimation starts here
     while True:
@@ -209,11 +224,13 @@ if __name__ == "__main__":
             
             stereoCalcTime = datetime.now()
             
-            if not aiTesting:
-                [x, y, z], [u, v, w] = stereoVisionCalculation(mtxL, mtxR, R, T, centerL, boxL, centerR, boxR)
-                pntRobo = linalg.inv(T_cm_to_pos_in_world).dot(np.array([[x], [y], [z], [1]]))
-            else:
-                temp = [boxL[0][0]/1280, boxL[0][1]/720, boxL[1][0]/1280, boxL[1][1]/720, boxL[2][0]/1280, boxL[2][1]/720, boxL[3][0]/1280, boxL[3][1]/720, 
+            [x, y, z], [u, v, w] = stereoVisionCalculation(mtxL, mtxR, R, T, centerL, boxL, centerR, boxR)
+            pntRobo = linalg.inv(T_cm_to_pos_in_world).dot(np.array([[x], [y], [z], [1]]))
+            #print(f"Robot coordinates: X {pntRobo[0][0]}, Y {pntRobo[1][0]}, Z {pntRobo[2][0]}, U {u}, V {v}, W {w}")
+         
+            if aiTesting:
+                temp = [centerL[0]/1280, centerL[1]/720,  centerR[0]/1280, centerR[1]/720,
+                        boxL[0][0]/1280, boxL[0][1]/720, boxL[1][0]/1280, boxL[1][1]/720, boxL[2][0]/1280, boxL[2][1]/720, boxL[3][0]/1280, boxL[3][1]/720, 
                         boxR[0][0]/1280, boxR[0][1]/720, boxR[1][0]/1280, boxR[1][1]/720, boxR[2][0]/1280, boxR[2][1]/720, boxR[3][0]/1280, boxR[3][1]/720]
                 input_point = np.array(temp).reshape(1, -1)  # Reshape to (1, 16)
                 predictions = model.predict(input_point)
@@ -221,19 +238,32 @@ if __name__ == "__main__":
                 pntRobo[1][0] = predictions[0][1]
                 pntRobo[2][0] = predictions[0][2]
                 v = predictions[0][3]
+                #print(f"Robot coordinates: X {pntRobo[0][0]}, Y {pntRobo[1][0]}, Z {pntRobo[2][0]}, V {v}")
 
-            """
             if linearCoeffsCorrection:
                 pntRobo[0][0]   = coeffs[0] + coeffs[1]*pntRobo[0][0]
                 pntRobo[1][0]   = coeffs[2] + coeffs[3]*pntRobo[1][0]
                 pntRobo[2][0]   = coeffs[4] + coeffs[5]*pntRobo[2][0]
                 v               = coeffs[6] + coeffs[7]*v
-            """
             
             informationsLog.append(['Estimation Position Time', stereoCalcTime,'Duration (s)', (datetime.now() - stereoCalcTime).total_seconds()])
-            
-            # Print position...
-            #print([x, y, z])
+            #print(f"Robot coordinates: X {pntRobo[0][0]}, Y {pntRobo[1][0]}, Z {pntRobo[2][0]}, V {v}")
+
+            ###-Teste_acerto_de_pontos-###
+            if not aiTesting:
+                pntRobo[0][0] = pntRobo[0][0] + 9 #+ 33.08206562
+                #pntRobo[1][0] = pntRobo[0][0] - 10.62173034
+                #pntRobo[2][0] = pntRobo[0][0] + 150 #+ 22.01714754
+                v = np.degrees(v) #-3.283750123
+                if abs(v)>75:
+                    v=0
+            if aiTesting:
+                pntRobo[0][0] = pntRobo[0][0] + 85.05722225 + 3
+                #pntRobo[1][0] = pntRobo[0][0] + 2.219887094
+                #pntRobo[2][0] = pntRobo[0][0] + 71.28844106
+                #v = np.degrees(v) -2.002228625
+            ###################""""""
+
             if 'meanX' in locals():
                 meanX = mean([meanX, pntRobo[0][0]])
                 meanY = mean([meanY, pntRobo[1][0]])
@@ -245,11 +275,39 @@ if __name__ == "__main__":
                 meanZ = pntRobo[2][0]
                 meanU = v
 
-            if (cv2.waitKey(1) & 0xFF == ord('r')):
-                del meanX
-
-            #print(f"Robot coordinates: X {pntRobo[0][0]}, Y {pntRobo[1][0]}, Z {pntRobo[2][0]}, U {u}, V {v}, W {w}")
             print(f"Mean robot coordinates: X {round(meanX, 2)}, Y {round(meanY, 2)}, Z {round(meanZ, 2)}, U {round(meanU, 2)} - Press R if ready to move the robot.")
+            
+            if (cv2.waitKey(1) & 0xFF == ord('r')):
+                # Print position...
+                conn.sendall(b"OK_py")
+                response = conn.recv(1024).decode()
+                print(response)
+                templen = len(bytes("{:.2f}".format(meanX), 'utf-8'))
+                conn.sendall(bytes(str(templen), 'utf-8'))
+                conn.sendall(bytes("{:.2f}".format(meanX), 'utf-8'))
+                confirmation = conn.recv(1024).decode()
+                if confirmation == "x_Recieved":
+                    templen = len(bytes("{:.2f}".format(meanY), 'utf-8'))
+                    conn.sendall(bytes(str(templen), 'utf-8'))
+                    conn.sendall(bytes("{:.2f}".format(meanY), 'utf-8'))
+                    confirmation = conn.recv(1024).decode()
+                if confirmation == "y_Recieved":
+                    templen = len(bytes("{:.2f}".format(meanZ), 'utf-8'))
+                    conn.sendall(bytes(str(templen), 'utf-8'))
+                    conn.sendall(bytes("{:.2f}".format(meanZ), 'utf-8'))
+                    confirmation = conn.recv(1024).decode()
+                if confirmation == "z_Recieved":
+                    templen = len(bytes("{:.2f}".format(meanU), 'utf-8'))
+                    conn.sendall(bytes(str(templen), 'utf-8'))
+                    conn.sendall(bytes("{:.2f}".format(meanU), 'utf-8'))
+                    confirmation = conn.recv(1024).decode()
+                if confirmation == "u_Recieved":
+                    print("Point coordinate was successfully transmitted!")
+
+                robotInPos = conn.recv(1024).decode()
+                del meanX,meanY,meanZ,meanU
+
+            #print([x, y, z])
 
         except Exception as error:
             # Capture a frame
