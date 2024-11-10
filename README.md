@@ -1,7 +1,7 @@
 # ! UNDER CONSTRUCTION !
 # Stereo Vision for a Robotic Manipulator
 ## Overview
-This code was developed to compare two approaches for the parallax phenomenon: a traditional calculation and a neural network model. The academic article is available at the following URL: [LUME | UFRGS (pt)](https://google.com/)[^1].
+This code was developed to compare two approaches for the parallax phenomenon: a traditional calculation and a neural network model. The academic article is available at the following URL: [LUME | UFRGS (pt-BR)](https://lume.ufrgs.br/handle/10183/280408)[^1].
 
 The Python script running in my computer communicates with an EPSON SCARA robot (4 DoF) via TCP/IP protocol to manipulate a rectangular object.
 
